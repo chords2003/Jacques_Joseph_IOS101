@@ -10,13 +10,55 @@ import UIKit
 
 extension BoardController {
   var letterCellIdentifier: String { "LetterCell" }
-  var itemPadding: Double { 3.0 }
+  var itemPadding: Double { 8 }
+  
+  func enter(_ string: String) {
+    guard numTimesGuessed < numItemsPerRow * numRows else { return }
+    guard string.count == 1 else {
+      assertionFailure("Expecting string of size 1")
+      return
+    }
+    let cell = collectionView.cellForItem(at: IndexPath(item: numTimesGuessed, section: 0)) as! LetterCell
+    cell.set(letter: string)
+    UIView.animate(withDuration: 0.1,
+                   delay: 0.0,
+                   options: [.autoreverse],
+                   animations: {
+      cell.transform = cell.transform.scaledBy(x: 1.05, y: 1.05)
+    }, completion: { finished in
+      cell.transform = CGAffineTransformIdentity
+    })
+    if isFinalGuessInRow() {
+      markLettersInRow()
+      if isAlienWordle {
+        var shouldGenerateAnotherWord = true
+        repeat {
+          let rawTheme = SettingsManager.shared.settingsDictionary[kWordThemeKey] as! String
+          let theme = WordTheme(rawValue: rawTheme)!
+          let newGoalWord = WordGenerator.generateGoalWord(with: theme)
+          shouldGenerateAnotherWord = newGoalWord == goalWord
+          if !shouldGenerateAnotherWord {
+            goalWord = newGoalWord
+          }
+        } while shouldGenerateAnotherWord
+      }
+    }
+    numTimesGuessed += 1
+  }
+  
+  func deleteLastCharacter() {
+    guard numTimesGuessed > 0 && numTimesGuessed % numItemsPerRow != 0 else { return }
+    let cell = collectionView.cellForItem(at: IndexPath(item: numTimesGuessed - 1, section: 0)) as! LetterCell
+    numTimesGuessed -= 1
+    cell.clearLetter()
+    cell.set(style: .initial)
+  }
   
   func isFinalGuessInRow() -> Bool {
-    if numGuesses == 0 {
+    if numTimesGuessed == 0 {
       return false
     }
-    return (numGuesses + 1) % numItemsPerRow == 0
+    return (numTimesGuessed + 1) % numItemsPerRow == 0
   }
   
   func markLettersInRow() {
@@ -62,7 +104,6 @@ extension BoardController {
   func getCorrectLettersOnly(countedSet: NSCountedSet,
                              remainingIndexPaths: inout Set<IndexPath>) -> [IndexPath] {
     var res = [IndexPath]()
-    let indexPaths = getIndexPaths(for: currRow)
     for indexPath in remainingIndexPaths {
       let cell = collectionView.cellForItem(at: indexPath) as! LetterCell
       let letterInCell = cell.letterLabel.text!
@@ -102,8 +143,23 @@ extension BoardController {
   func collectionView(_ collectionView: UICollectionView,
                       layout collectionViewLayout: UICollectionViewLayout,
                       sizeForItemAt indexPath: IndexPath) -> CGSize {
-    let width = collectionView.frame.size.width / Double(numItemsPerRow) - (Double(numItemsPerRow) - 1.0) * itemPadding
-    let height = collectionView.frame.size.height / Double(numRows) - (Double(numRows) - 1.0) * itemPadding
-    return CGSize(width: width, height: height)
+
+    let horizontalPadding = CGFloat(numItemsPerRow - 1) * itemPadding
+    let horizontalSpace = collectionView.frame.size.width - horizontalPadding
+    let cellWidth = (horizontalSpace / CGFloat(numItemsPerRow)).rounded(.down)
+
+    let verticalPadding = CGFloat(numRows - 1) * itemPadding
+    let verticalSpace = collectionView.frame.size.height - verticalPadding
+    let cellHeight = (verticalSpace / CGFloat(numRows)).rounded(.down)
+
+    return CGSize(width: cellWidth, height: cellHeight)
+  }
+
+  func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
+    itemPadding
+  }
+
+  func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumInteritemSpacingForSectionAt section: Int) -> CGFloat {
+    itemPadding
   }
 }
